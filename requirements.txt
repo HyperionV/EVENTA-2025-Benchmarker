@@ -1,0 +1,6 @@
+streamlit
+rouge-score
+bert-score[torch]
+nltk
+scikit-learn
+torch 
