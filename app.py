@@ -10,6 +10,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 from io import BytesIO
+import plotly.express as px
 
 st.set_page_config(layout="wide")
 
@@ -144,11 +145,10 @@ def compute_evaluations(tc):
 def display_evaluations(tc_title):
     if tc_title in st.session_state.get('evaluations', {}):
         st.divider()
-        st.subheader("Evaluation Results")
+        st.subheader("Metrics")
         evaluations = st.session_state.evaluations[tc_title]
         models = list(evaluations.keys())
 
-        # Check number of models
         if len(models) < 2:
             st.warning(
                 "At least two models are required to display the evaluation comparison.")
@@ -160,7 +160,6 @@ def display_evaluations(tc_title):
 
         col1, col2 = st.columns(2)
 
-        # Model 1
         with col1:
             model1 = models[0]
             st.write(f"#### {model1}")
@@ -170,7 +169,6 @@ def display_evaluations(tc_title):
                     st.metric(
                         label=metric, value=f"{metrics1[metric]:.4f}", help=metric_explanations.get(metric, ""))
 
-        # Model 2
         with col2:
             model2 = models[1]
             st.write(f"#### {model2}")
@@ -194,7 +192,6 @@ def compute_overall_evaluations():
                     if metric in st.session_state.evaluations[tc_title][model]:
                         overall[model][metric].append(
                             st.session_state.evaluations[tc_title][model][metric])
-    # Compute means
     for model in overall:
         for metric in overall[model]:
             if overall[model][metric]:
@@ -216,7 +213,6 @@ if 'selected_metrics' not in st.session_state:
 # Configuration Panel (Sidebar)
 with st.sidebar:
     st.subheader("Configuration")
-    # Add New Models
     model_input = st.text_input("Enter model name")
     if st.button("Add Model"):
         if model_input and model_input not in st.session_state.models:
@@ -226,12 +222,10 @@ with st.sidebar:
             st.warning("Model name already exists or is empty")
     st.write("Current models:", ", ".join(st.session_state.models))
 
-    # Select Metrics
     st.session_state.selected_metrics = st.multiselect(
         "Select metrics to display", available_metrics, default=available_metrics
     )
 
-    # Add New Test Case (Manual)
     st.subheader("Add New Test Case")
     new_title = st.text_input("Title")
     new_content = st.text_area("Original Content", height=200)
@@ -268,7 +262,6 @@ if uploaded_file is not None:
         with st.spinner("Auto-evaluating all test cases..."):
             for tc in st.session_state.test_cases:
                 compute_evaluations(tc)
-            # Collect results for Excel
             evaluation_results = []
             for tc in st.session_state.test_cases:
                 tc_title = tc['title']
@@ -312,7 +305,6 @@ if st.session_state.test_cases:
                         st.write(f"Generation Time: {tc[model]['time']}")
                 else:
                     st.write(f"{model}: No summary available")
-            # Display evaluations if available
             if selected_article in st.session_state.get('evaluations', {}):
                 display_evaluations(selected_article)
             else:
@@ -321,15 +313,45 @@ if st.session_state.test_cases:
                         compute_evaluations(tc)
                     display_evaluations(selected_article)
             break
-    # Overall Evaluation
     if 'evaluations' in st.session_state and st.session_state.evaluations:
         overall_evaluations = compute_overall_evaluations()
         st.subheader("Overall Evaluation")
-        for model, metrics in overall_evaluations.items():
-            st.write(f"#### {model}")
-            for metric, score in metrics.items():
-                if metric in st.session_state.selected_metrics:
+        models = list(overall_evaluations.keys())
+        if len(models) == 2:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"#### {models[0]}")
+                for metric in st.session_state.selected_metrics:
+                    score = overall_evaluations[models[0]].get(metric, 0.0)
                     st.metric(
                         label=metric, value=f"{score:.4f}", help=metric_explanations.get(metric, ""))
+            with col2:
+                st.write(f"#### {models[1]}")
+                for metric in st.session_state.selected_metrics:
+                    score = overall_evaluations[models[1]].get(metric, 0.0)
+                    st.metric(
+                        label=metric, value=f"{score:.4f}", help=metric_explanations.get(metric, ""))
+        else:
+            st.write("Overall average metrics:")
+            for model in models:
+                st.write(f"#### {model}")
+                for metric in st.session_state.selected_metrics:
+                    score = overall_evaluations[model].get(metric, 0.0)
+                    st.metric(
+                        label=metric, value=f"{score:.4f}", help=metric_explanations.get(metric, ""))
+        st.subheader("Visualization")
+        if models and st.session_state.selected_metrics:
+            vis_data = {model: [overall_evaluations[model].get(
+                metric, 0.0) for metric in st.session_state.selected_metrics] for model in models}
+            df = pd.DataFrame(
+                vis_data, index=st.session_state.selected_metrics)
+            df_long = df.reset_index().melt(
+                id_vars='index', var_name='Model', value_name='Score')
+            fig = px.bar(df_long, x='index', y='Score', color='Model',
+                         barmode='group', title="Average Metrics Comparison")
+            fig.update_layout(xaxis_title="Metrics", yaxis_title="Score")
+            st.plotly_chart(fig)
+        else:
+            st.write("No data to visualize.")
 else:
     st.warning("No data available. Please import data or add test cases.")
