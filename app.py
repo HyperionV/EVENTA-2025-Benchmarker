@@ -14,7 +14,6 @@ import plotly.express as px
 
 st.set_page_config(layout="wide")
 
-# Metric explanations for tooltips
 metric_explanations = {
     "BLEU-4": "BLEU measures how similar the generated text is to the reference by counting matching n-grams. Scores range from 0 to 1, higher is better.",
     "ROUGE-1": "ROUGE-1 measures unigram overlap between generated and reference texts. Higher scores (0-1) indicate better quality.",
@@ -24,12 +23,8 @@ metric_explanations = {
     "BERTScore F1": "BERTScore uses BERT embeddings for semantic similarity. Scores range from 0 to 1, higher indicates better semantic match."
 }
 
-# Available metrics
 available_metrics = ["BLEU-4", "ROUGE-1",
                      "ROUGE-2", "ROUGE-L", "METEOR", "BERTScore F1"]
-
-# Helper functions
-
 
 @st.cache_data
 def download_nltk_data():
@@ -202,7 +197,6 @@ def compute_overall_evaluations():
     return overall
 
 
-# Initialize session state
 if 'models' not in st.session_state:
     st.session_state.models = []
 if 'test_cases' not in st.session_state:
@@ -210,7 +204,6 @@ if 'test_cases' not in st.session_state:
 if 'selected_metrics' not in st.session_state:
     st.session_state.selected_metrics = available_metrics
 
-# Configuration Panel (Sidebar)
 with st.sidebar:
     st.subheader("Configuration")
     model_input = st.text_input("Enter model name")
@@ -245,10 +238,8 @@ with st.sidebar:
         else:
             st.warning("Please enter title and original content")
 
-# Main Page
-st.title("Text Generation Benchmark")
+st.title("Summarization Benchmark")
 
-# Import JSON Data
 st.subheader("Import Data")
 uploaded_file = st.file_uploader("Upload JSON data", type="json")
 auto_evaluate = st.checkbox("Auto Evaluate", value=False)
@@ -259,9 +250,17 @@ if uploaded_file is not None:
     st.session_state.test_cases = data['content']
     st.success("Data imported successfully")
     if auto_evaluate:
-        with st.spinner("Auto-evaluating all test cases..."):
-            for tc in st.session_state.test_cases:
+        total_cases = len(st.session_state.test_cases)
+        if total_cases > 0:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            status_text.text("Starting evaluation...")
+            for i, tc in enumerate(st.session_state.test_cases):
                 compute_evaluations(tc)
+                progress = (i + 1) / total_cases
+                progress_bar.progress(progress)
+                status_text.text(f"Evaluating test case {i + 1}/{total_cases}")
+            status_text.text("Evaluation completed!")
             evaluation_results = []
             for tc in st.session_state.test_cases:
                 tc_title = tc['title']
@@ -286,6 +285,8 @@ if uploaded_file is not None:
                 file_name="evaluation_results.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+        else:
+            st.warning("No test cases available to evaluate.")
 
 # Article Selection and Display
 if st.session_state.test_cases:
