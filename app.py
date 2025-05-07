@@ -80,16 +80,13 @@ def calculate_metrics(generated_text, original_text):
     except Exception as e:
         results['BERTScore'] = {'Error': f"Could not calculate BERTScore: {e}"}
 
-    # NLTK-based Scores
     original_tokens = word_tokenize(original_text)
     generated_tokens = word_tokenize(generated_text)
 
     if original_tokens and generated_tokens:
-        # BLEU (using sentence_bleu, expects list of references)
         results['BLEU'] = {
             'BLEU-4': sentence_bleu([original_tokens], generated_tokens, weights=(0.25, 0.25, 0.25, 0.25))
         }
-        # METEOR
         results['METEOR'] = {
             'METEOR': single_meteor_score(original_tokens, generated_tokens)
         }
@@ -97,7 +94,6 @@ def calculate_metrics(generated_text, original_text):
         results['BLEU'] = {'BLEU-4': 0.0}
         results['METEOR'] = {'METEOR': 0.0}
 
-    # TF-IDF Cosine Similarity
     try:
         vectorizer = TfidfVectorizer()
         tfidf_matrix = vectorizer.fit_transform(
@@ -105,10 +101,9 @@ def calculate_metrics(generated_text, original_text):
         results['Cosine Similarity'] = {
             'TF-IDF Cosine': cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
         }
-    except ValueError:  # Handle case with empty strings after tokenization/preprocessing
+    except ValueError:  
         results['Cosine Similarity'] = {'TF-IDF Cosine': 0.0}
 
-    # Create a focused results dictionary with only the key metrics
     focused_results = {
         'BLEU': {'BLEU-4': results['BLEU']['BLEU-4']},
         'ROUGE': {
@@ -120,7 +115,6 @@ def calculate_metrics(generated_text, original_text):
         'BERTScore': {'F1': results['BERTScore'].get('F1', 0.0)}
     }
 
-    # Return both the full results and the focused results
     return results, focused_results
 
 
@@ -147,7 +141,6 @@ if st.button("📊 Calculate Scores", use_container_width=True):
 
         st.subheader("📊 Benchmark Results")
 
-        # Display results in a more structured way
         df_data = []
         for category, metrics in results.items():
             for metric, value in metrics.items():
@@ -162,13 +155,11 @@ if st.button("📊 Calculate Scores", use_container_width=True):
 
         st.subheader("🔍 Focused Metrics")
 
-        # Display focused results with tooltips
         df_focused_data = []
         for category, metrics in focused_results.items():
             for metric, value in metrics.items():
                 if isinstance(value, float):
                     value = round(value, 4)
-                # Get the tooltip text for this metric
                 tooltip = ""
                 if metric == "BLEU-4":
                     tooltip = metric_explanations["BLEU-4"]
@@ -183,7 +174,6 @@ if st.button("📊 Calculate Scores", use_container_width=True):
 
         df_focused = pd.DataFrame(df_focused_data)
 
-        # Use column_config to add tooltips
         st.dataframe(
             df_focused,
             column_config={
@@ -209,11 +199,9 @@ if st.button("📊 Calculate Scores", use_container_width=True):
             hide_index=True,
         )
 
-        # Create a more visual representation of the key metrics
         st.subheader("📈 Key Metrics Visualization")
         st.caption("Hover over each metric name for a detailed explanation")
 
-        # Extract metrics for visualization
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
