@@ -23,6 +23,10 @@ metric_explanations = {
     "BERTScore F1": "BERTScore uses BERT embeddings for semantic similarity. Scores range from 0 to 1, higher indicates better semantic match."
 }
 
+# Available metrics
+available_metrics = ["BLEU-4", "ROUGE-1",
+                     "ROUGE-2", "ROUGE-L", "METEOR", "BERTScore F1"]
+
 # Helper functions
 
 
@@ -139,6 +143,8 @@ def compute_evaluations(tc):
 
 def display_evaluations(tc_title):
     if tc_title in st.session_state.get('evaluations', {}):
+        st.divider()
+        st.subheader("Evaluation Results")
         evaluations = st.session_state.evaluations[tc_title]
         models = list(evaluations.keys())
 
@@ -146,13 +152,12 @@ def display_evaluations(tc_title):
         if len(models) < 2:
             st.warning(
                 "At least two models are required to display the evaluation comparison.")
+            st.divider()
             return
         if len(models) > 2:
             st.warning(
                 f"More than two models detected ({len(models)}). Displaying only the first two: {models[0]} and {models[1]}.")
 
-        # Display evaluations for the first two models
-        st.subheader("Evaluation Results")
         col1, col2 = st.columns(2)
 
         # Model 1
@@ -160,22 +165,44 @@ def display_evaluations(tc_title):
             model1 = models[0]
             st.write(f"#### {model1}")
             metrics1 = evaluations[model1]
-            selected_metrics = [
-                m for m in st.session_state.selected_metrics if m in metrics1]
-            for metric in selected_metrics:
-                st.metric(
-                    label=metric, value=f"{metrics1[metric]:.4f}", help=metric_explanations.get(metric, ""))
+            for metric in st.session_state.selected_metrics:
+                if metric in metrics1:
+                    st.metric(
+                        label=metric, value=f"{metrics1[metric]:.4f}", help=metric_explanations.get(metric, ""))
 
         # Model 2
         with col2:
             model2 = models[1]
             st.write(f"#### {model2}")
             metrics2 = evaluations[model2]
-            selected_metrics = [
-                m for m in st.session_state.selected_metrics if m in metrics2]
-            for metric in selected_metrics:
-                st.metric(
-                    label=metric, value=f"{metrics2[metric]:.4f}", help=metric_explanations.get(metric, ""))
+            for metric in st.session_state.selected_metrics:
+                if metric in metrics2:
+                    st.metric(
+                        label=metric, value=f"{metrics2[metric]:.4f}", help=metric_explanations.get(metric, ""))
+        st.divider()
+
+
+def compute_overall_evaluations():
+    if 'evaluations' not in st.session_state or not st.session_state.evaluations:
+        return {}
+    overall = {model: {metric: [] for metric in available_metrics}
+               for model in st.session_state.models}
+    for tc_title in st.session_state.evaluations:
+        for model in st.session_state.evaluations[tc_title]:
+            if model in overall:
+                for metric in available_metrics:
+                    if metric in st.session_state.evaluations[tc_title][model]:
+                        overall[model][metric].append(
+                            st.session_state.evaluations[tc_title][model][metric])
+    # Compute means
+    for model in overall:
+        for metric in overall[model]:
+            if overall[model][metric]:
+                overall[model][metric] = sum(
+                    overall[model][metric]) / len(overall[model][metric])
+            else:
+                overall[model][metric] = 0.0
+    return overall
 
 
 # Initialize session state
@@ -184,8 +211,7 @@ if 'models' not in st.session_state:
 if 'test_cases' not in st.session_state:
     st.session_state.test_cases = []
 if 'selected_metrics' not in st.session_state:
-    st.session_state.selected_metrics = [
-        "BLEU-4", "ROUGE-1", "ROUGE-2", "ROUGE-L", "METEOR", "BERTScore F1"]
+    st.session_state.selected_metrics = available_metrics
 
 # Configuration Panel (Sidebar)
 with st.sidebar:
@@ -201,8 +227,6 @@ with st.sidebar:
     st.write("Current models:", ", ".join(st.session_state.models))
 
     # Select Metrics
-    available_metrics = ["BLEU-4", "ROUGE-1",
-                         "ROUGE-2", "ROUGE-L", "METEOR", "BERTScore F1"]
     st.session_state.selected_metrics = st.multiselect(
         "Select metrics to display", available_metrics, default=available_metrics
     )
@@ -246,12 +270,19 @@ if uploaded_file is not None:
                 compute_evaluations(tc)
             # Collect results for Excel
             evaluation_results = []
-            for tc_title in st.session_state.evaluations:
-                for model in st.session_state.evaluations[tc_title]:
-                    metrics = st.session_state.evaluations[tc_title][model]
-                    row = {'Title': tc_title, 'Model': model}
-                    row.update(metrics)
-                    evaluation_results.append(row)
+            for tc in st.session_state.test_cases:
+                tc_title = tc['title']
+                for model in st.session_state.models:
+                    if model in tc and tc_title in st.session_state.evaluations and model in st.session_state.evaluations[tc_title]:
+                        metrics = st.session_state.evaluations[tc_title][model]
+                        row = {
+                            'Title': tc_title,
+                            'Model': model,
+                            'Summary': tc[model]['content'],
+                            'Generation Time': tc[model]['time']
+                        }
+                        row.update(metrics)
+                        evaluation_results.append(row)
             df = pd.DataFrame(evaluation_results)
             output = BytesIO()
             df.to_excel(output, index=False, engine='xlsxwriter')
@@ -290,5 +321,15 @@ if st.session_state.test_cases:
                         compute_evaluations(tc)
                     display_evaluations(selected_article)
             break
+    # Overall Evaluation
+    if 'evaluations' in st.session_state and st.session_state.evaluations:
+        overall_evaluations = compute_overall_evaluations()
+        st.subheader("Overall Evaluation")
+        for model, metrics in overall_evaluations.items():
+            st.write(f"#### {model}")
+            for metric, score in metrics.items():
+                if metric in st.session_state.selected_metrics:
+                    st.metric(
+                        label=metric, value=f"{score:.4f}", help=metric_explanations.get(metric, ""))
 else:
     st.warning("No data available. Please import data or add test cases.")
